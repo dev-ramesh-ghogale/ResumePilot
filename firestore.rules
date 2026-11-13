@@ -1,0 +1,137 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 256 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() &&
+        request.auth.token.email is string &&
+        request.auth.token.email_verified == true;
+    }
+
+    function isPrimaryAdmin() {
+      return isVerifiedUser() &&
+        request.auth.token.email.lower() == 'dev.ramesh.ghogale@gmail.com';
+    }
+
+    function isAdmin() {
+      return isPrimaryAdmin() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidAllowedUser(data) {
+      return data.keys().hasAll(['email', 'status', 'addedBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['email', 'companyName', 'notes', 'status', 'addedBy', 'createdAt', 'updatedAt']) &&
+        data.email is string &&
+        data.email.size() >= 3 &&
+        data.email.size() <= 120 &&
+        data.email == data.email.lower() &&
+        data.status in ['active', 'revoked'] &&
+        data.addedBy is string &&
+        data.addedBy.size() >= 3 &&
+        data.addedBy.size() <= 120 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        (!('companyName' in data) || (data.companyName is string && data.companyName.size() <= 100)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 240));
+    }
+
+    function isValidAccessRequest(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'companyName', 'status', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.email is string &&
+        data.email.size() >= 3 &&
+        data.email.size() <= 120 &&
+        data.email == data.email.lower() &&
+        data.displayName is string &&
+        data.displayName.size() <= 100 &&
+        (!('companyName' in data) || (data.companyName is string && data.companyName.size() <= 100)) &&
+        data.status in ['pending', 'approved', 'dismissed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /allowed_users/{allowedUserId} {
+      allow get: if isValidId(allowedUserId) && (
+        isAdmin() ||
+        (isVerifiedUser() && resource != null && resource.data.email == request.auth.token.email.lower())
+      );
+      allow list: if isPrimaryAdmin() ||
+        (isVerifiedUser() && resource.data.email == request.auth.token.email.lower());
+      allow create: if isValidId(allowedUserId) &&
+        isAdmin() &&
+        isValidAllowedUser(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(allowedUserId) &&
+        isValidAllowedUser(incoming()) &&
+        isAdmin() &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().email == existing().email &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'companyName', 'notes', 'addedBy', 'updatedAt']);
+      allow delete: if isValidId(allowedUserId) && isAdmin();
+    }
+
+    match /access_requests/{userId} {
+      allow get: if isValidId(userId) && (
+        isAdmin() ||
+        (isVerifiedUser() && request.auth.uid == userId)
+      );
+      allow list: if isPrimaryAdmin() ||
+        (isVerifiedUser() && resource.data.uid == request.auth.uid);
+      allow create: if isValidId(userId) &&
+        isVerifiedUser() &&
+        request.auth.uid == userId &&
+        isValidAccessRequest(incoming()) &&
+        incoming().uid == request.auth.uid &&
+        incoming().email == request.auth.token.email.lower() &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(userId) &&
+        isValidAccessRequest(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().updatedAt == request.time && (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'companyName', 'updatedAt'])) ||
+          (isVerifiedUser() &&
+            request.auth.uid == userId &&
+            existing().status == 'pending' &&
+            incoming().status == 'pending' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'companyName', 'updatedAt']))
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isAdmin();
+      allow list: if isPrimaryAdmin();
+      allow create, update, delete: if false;
+    }
+  }
+}

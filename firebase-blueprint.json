@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "AllowedUser": {
+      "title": "AllowedUser",
+      "description": "A Gmail address explicitly authorized by the administrator to use ResumeCollector and sync resumes to Google Drive.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120,
+          "description": "Lowercase Gmail address authorized to access the tool."
+        },
+        "companyName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Optional client or company name."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "Optional administrator notes."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "revoked"],
+          "description": "Current access state controlled by the administrator."
+        },
+        "addedBy": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Email of the administrator who created or updated the record."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when access was first granted."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last status or metadata change."
+        }
+      },
+      "required": ["email", "status", "addedBy", "createdAt", "updatedAt"]
+    },
+    "AccessRequest": {
+      "title": "AccessRequest",
+      "description": "An access request submitted by an unapproved signed-in Google user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the requesting user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120,
+          "description": "Verified lowercase Gmail address of the requester."
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Display name from the user's Google account."
+        },
+        "companyName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Optional company name entered by the requester."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "dismissed"],
+          "description": "Lifecycle status of the access request."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the request was submitted."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the request was updated."
+        }
+      },
+      "required": ["uid", "email", "displayName", "status", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Explicit administrator identity record.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 120,
+          "description": "Verified administrator email."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp."
+        }
+      },
+      "required": ["email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/allowed_users/{allowedUserId}": {
+      "schema": {
+        "$ref": "#/entities/AllowedUser"
+      },
+      "description": "Allowlist of Gmail IDs permitted to use ResumeCollector, keyed by hex-encoded lowercase email."
+    },
+    "/access_requests/{userId}": {
+      "schema": {
+        "$ref": "#/entities/AccessRequest"
+      },
+      "description": "Access requests submitted by unapproved users awaiting admin approval, keyed by user UID."
+    },
+    "/admins/{adminId}": {
+      "schema": {
+        "$ref": "#/entities/AdminRecord"
+      },
+      "description": "Optional secondary admin records alongside bootstrapped primary admin."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "ResumeCollector",
+  "description": "Automated Gmail monitor that checks every 5 minutes for emails with 'resume' in the subject and saves attachments directly to your Google Drive folder.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
